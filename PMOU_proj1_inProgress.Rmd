@@ -1,0 +1,169 @@
+---
+title: "PMOU_proj1"
+author: "Pieter van Veelen"
+date: "2025-02-25"
+output: html_document
+---
+
+```{r setup, include=T}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(engine.opts = list(bash = "-l"))
+
+options(scipen = 999)
+
+## packages required
+packages <- c("phyloseq", "qiime2R", "tidyverse", "magrittr", "devtools", "qiime2R", "here", "breakaway", "DivNet", "openxlsx", "ape", "vegan", "ggtext", "cowplot", "RColorBrewer", "microbiome", "lme4", "lmerTest","decontam", "remotes", "ampvis2", "speedyseq", "ggh4x", "kableExtra", "phia", "MASS", "ggord", "glue", "lubridate")
+
+# install packages not yet installed
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+  install.packages(packages[!installed_packages])
+}
+# 
+# # packages not available for R 4.1.2
+# ## phyloseq
+# if(!requireNamespace("BiocManager")){install.packages("BiocManager")}
+# BiocManager::install("phyloseq")
+# 
+# ## qiime2R
+# if (!requireNamespace("devtools", quietly = TRUE)){install.packages("devtools")}
+# devtools::install_github("jbisanz/qiime2R")
+# 
+# ## breakaway
+# install.packages("devtools")
+# devtools::install_github("adw96/breakaway")
+# 
+# ## DivNet
+# remotes::install_github("adw96/breakaway")
+# remotes::install_github("adw96/DivNet")
+# 
+# ## microbiome
+# library(BiocManager)
+# BiocManager::install("microbiome")
+# 
+# ## decontam
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+# install.packages("BiocManager")
+# BiocManager::install("decontam")
+# 
+# ## ampvis2
+# if (!requireNamespace("ampvis2", quietly = TRUE))
+# install.packages("ampvis2")
+# remotes::install_github("MadsAlbertsen/ampvis2", Ncpus = 6)
+# 
+## speedyseq
+if (!requireNamespace("speedyseq", quietly = TRUE))
+    install.packages("speedyseq")
+remotes::install_github("mikemc/speedyseq")
+# 
+## ggord
+if (!requireNamespace("ggord", quietly = TRUE))
+install.packages("remotes")
+remotes::install_github("fawda123/ggord")
+
+```
+
+### Loading libraries
+
+```{r library loading, message=F, echo=T, eval=T, warning=T, include=T, cache=F}
+# load required packages
+library(magrittr)
+#library(speedyseq)
+library(phyloseq)
+library(qiime2R)
+library(magrittr)
+library(devtools)
+library(qiime2R)
+library(here)
+library(breakaway)
+library(DivNet)
+library(openxlsx)
+library(ape)
+library(vegan)
+library(ggtext)
+library(cowplot)
+library(RColorBrewer)
+library(microbiome)
+library(lme4)
+library(lmerTest)
+library(decontam)
+library(remotes)
+library(ampvis2)
+library(ggh4x)
+library(ggord)
+library(glue)
+library(lubridate)
+library(phia)
+library(kableExtra)
+library(MASS)
+library(tidyverse)
+library(MicrobiotaProcess)
+
+```
+
+```{r import data}
+
+data = openxlsx::read.xlsx("input_data/Data for analysis- FCM.xlsx", sheet = 1) %>% as_tibble() %>% janitor::clean_names()
+
+plot_exp12 = 
+data %>% 
+  mutate(exp_id = case_when(treatment == "control" ~ "exp_1",
+                            treatment == "NAC" & p_h != 7 ~ "exp_2",
+                            treatment == "pH" ~ "exp_3", 
+                            treatment == "NAC" & p_h == 7 ~ "exp_4",
+                            TRUE ~ NA_character_)) %>% 
+  #filter(state == "alive") %>% 
+  filter(grepl("exp_1|exp_2", exp_id)) %>% 
+  ggplot(aes(x=as.factor(nac_conc), y=value_percent)) +
+  geom_boxplot(aes(color = treatment)) +
+  geom_point(aes(color = treatment), size = 2) + 
+  theme_light() +
+  facet_wrap(~state)
+
+plot_exp134 = 
+data %>% 
+  mutate(exp_id = case_when(treatment == "control" ~ "exp_1",
+                            treatment == "NAC" & p_h != 7 ~ "exp_2",
+                            treatment == "pH" ~ "exp_3", 
+                            treatment == "NAC" & p_h == 7 ~ "exp_4",
+                            TRUE ~ NA_character_)) %>% 
+  mutate(p_h_fact = factor(p_h, levels = c("7", "4.2", "3.6", "3.1", "2.8"))) %>% 
+  #filter(state == "alive") %>% 
+  filter(!grepl("exp_4", exp_id)) %>% 
+  ggplot(aes(x=p_h_fact, y=value_percent)) +
+  geom_boxplot(aes(color = treatment)) +
+  geom_point(aes(color = treatment), size = 2) + 
+  theme_light() +
+  facet_wrap(~state) 
+
+plot_exp124 = 
+data %>% 
+  mutate(exp_id = case_when(treatment == "control" ~ "exp_1",
+                            treatment == "NAC" & p_h != 7 ~ "exp_2",
+                            treatment == "pH" ~ "exp_3", 
+                            treatment == "NAC" & p_h == 7 ~ "exp_4",
+                            TRUE ~ NA_character_)) %>% 
+  mutate(p_h_fact = factor(p_h, levels = c("7", "4.2", "3.6", "3.1", "2.8"))) %>% 
+  #filter(state == "alive") %>% 
+  filter(!grepl("exp_3", exp_id)) %>% 
+  mutate(new_group = case_when(p_h == 7 & treatment == "NAC" ~ "pH adjusted",
+                               TRUE ~ treatment)) %>% 
+  ggplot(aes(x=as.factor(nac_conc), y=value_percent)) +
+  geom_boxplot(aes(color = new_group)) +
+  geom_point(aes(color = new_group), size = 2) + 
+  theme_light() +
+  facet_wrap(~state) 
+
+if(!dir.exists("figures")){dir.create("figures")}
+
+# save plots
+ggsave(plot = plot_exp12, filename = "figures/plot_exp_1_and_2.pdf", width = 8, height = 4.5)
+ggsave(plot = plot_exp134, filename = "figures/plot_exp_1_3_and_4.pdf", width = 8, height = 4.5)
+ggsave(plot = plot_exp124, filename = "figures/plot_exp_1_2_and_4.pdf", width = 8, height = 4.5)
+
+ggsave(plot = plot_exp12, filename = "figures/plot_exp_1_and_2.jpg", width = 8, height = 4.5)
+ggsave(plot = plot_exp134, filename = "figures/plot_exp_1_3_and_4.jpg", width = 8, height = 4.5)
+ggsave(plot = plot_exp124, filename = "figures/plot_exp_1_2_and_4.jpg", width = 8, height = 4.5)
+
+```
+
